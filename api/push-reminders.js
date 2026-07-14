@@ -8,7 +8,6 @@ webpush.setVapidDetails(
   process.env.VAPID_PRIVATE_KEY
 );
 
-// Prager Zeit (Sommer = UTC+2). Wir rechnen alles in Prager Ortszeit.
 const PRAGUE_OFFSET_HOURS = 2;
 
 function nowInPrague() {
@@ -17,18 +16,23 @@ function nowInPrague() {
 }
 
 export default async function handler(req, res) {
+  // Schutz: nur mit korrektem Secret aufrufbar
+  const secret = process.env.CRON_SECRET;
+  const provided = req.query.key || req.headers["x-cron-key"];
+  if (secret && provided !== secret) {
+    return res.status(401).json({ error: "unauthorized" });
+  }
+
   try {
     const now = nowInPrague();
-    const todayStr = now.toISOString().slice(0, 10); // YYYY-MM-DD (Prag)
+    const todayStr = now.toISOString().slice(0, 10);
     const nowMin = now.getUTCHours() * 60 + now.getUTCMinutes();
 
-    // Nur heutige Starts betrachten
     const todaysStarts = STARTS.filter((s) => s.date === todayStr);
     if (todaysStarts.length === 0) {
       return res.status(200).json({ ok: true, sent: 0, note: "keine Starts heute" });
     }
 
-    // Alle Anmeldungen laden
     const keys = await kv.smembers("sub:index");
     let sent = 0;
 
@@ -47,12 +51,11 @@ export default async function handler(req, res) {
         const startMin = h * 60 + m;
         const diff = startMin - nowMin;
 
-        // im Fenster [lead-0.5 ... lead+0.5] Minuten -> genau jetzt erinnern
         if (diff <= lead && diff > lead - 1) {
           const dedupeKey = "fired:" + key + ":" + s.date + ":" + s.discipline + ":" + s.time;
           const already = await kv.get(dedupeKey);
           if (already) continue;
-          await kv.set(dedupeKey, 1, { ex: 7200 }); // 2h merken
+          await kv.set(dedupeKey, 1, { ex: 7200 });
 
           const payload = JSON.stringify({
             title: "CTIF 2026 – Start bald!",
@@ -65,7 +68,6 @@ export default async function handler(req, res) {
             await webpush.sendNotification(record.subscription, payload);
             sent++;
           } catch (err) {
-            // Abgelaufene Anmeldung entfernen
             if (err.statusCode === 404 || err.statusCode === 410) {
               await kv.del(key);
               await kv.srem("sub:index", key);
