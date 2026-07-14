@@ -7,6 +7,7 @@ import { requestPermission, notificationSupport } from "../lib/notify";
 import { getTeamSlots, liveSlotStatus } from "../hooks/useTeamSchedule";
 import { useStartReminders } from "../hooks/useStartReminders";
 import { flagLabel } from "../lib/flags";
+import { pushSupported, subscribePush, unsubscribePush, syncPush } from "../lib/push";
 
 const REMINDER_OPTIONS = [5, 10, 15, 30, 60];
 
@@ -19,15 +20,20 @@ export default function MyTeams() {
   } = useSettings();
   const [now, setNow] = useState(() => new Date());
   const [selected, setSelected] = useState<string[]>([]);
+  const [busy, setBusy] = useState(false);
 
-  useStartReminders(); // Start-Erinnerungen aktiv halten
+  useStartReminders(); // lokale Erinnerungen (wenn App offen)
 
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 30_000);
     return () => clearInterval(t);
   }, []);
 
-  // Ergebnis-Benachrichtigungen umschalten (fragt bei Bedarf um Erlaubnis)
+  // Wenn Favoriten oder Vorlaufzeit sich ändern -> Backend aktualisieren (falls angemeldet)
+  useEffect(() => {
+    if (startReminderEnabled) syncPush().catch(() => {});
+  }, [favorites, startReminderMinutes, startReminderEnabled]);
+
   const toggleNotifications = async () => {
     if (!notificationsEnabled) {
       const p = await requestPermission();
@@ -37,16 +43,28 @@ export default function MyTeams() {
     }
   };
 
-  // Start-Erinnerung umschalten (braucht ebenfalls Erlaubnis)
+  // Start-Erinnerung = echtes Web-Push an/aus
   const toggleReminder = async () => {
-    if (!startReminderEnabled) {
-      const p = await requestPermission();
-      if (p === "granted") {
-        setStartReminder(true);
-        if (!notificationsEnabled) setNotifications(true);
+    setBusy(true);
+    try {
+      if (!startReminderEnabled) {
+        if (!pushSupported()) {
+          alert("Dieses Gerät/dieser Browser unterstützt keine Push-Benachrichtigungen.\n\nTipp: Auf dem iPhone die App zuerst über 'Teilen → Zum Home-Bildschirm' installieren.");
+          return;
+        }
+        const ok = await subscribePush();
+        if (ok) {
+          setStartReminder(true);
+          if (!notificationsEnabled) setNotifications(true);
+        } else {
+          alert("Benachrichtigungen wurden nicht erlaubt.");
+        }
+      } else {
+        await unsubscribePush();
+        setStartReminder(false);
       }
-    } else {
-      setStartReminder(false);
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -74,16 +92,14 @@ export default function MyTeams() {
         <p className="text-sm font-semibold text-slate-300">Benachrichtigungen</p>
 
         {notifUnsupported && (
-          <p className="text-sm text-amber-300">
-            Dieser Browser unterstützt keine Benachrichtigungen.
-          </p>
+          <p className="text-sm text-amber-300">Dieser Browser unterstützt keine Benachrichtigungen.</p>
         )}
 
-        {/* Ergebnis-Benachrichtigungen */}
+        {/* Ergebnis-Updates (lokal, wenn App offen) */}
         <div className="flex items-center justify-between">
           <div>
             <div className="text-sm font-medium">Ergebnis-Updates</div>
-            <div className="text-xs text-slate-400">Bei neuem Ergebnis / Rangänderung deiner Gruppen</div>
+            <div className="text-xs text-slate-400">Bei neuem Ergebnis / Rangänderung (App muss offen sein)</div>
           </div>
           <button onClick={toggleNotifications} disabled={notifUnsupported}
             className={"relative h-7 w-12 rounded-full transition-colors " +
@@ -93,13 +109,13 @@ export default function MyTeams() {
           </button>
         </div>
 
-        {/* Start-Erinnerung */}
+        {/* Start-Erinnerung (echtes Push, auch bei geschlossener App) */}
         <div className="flex items-center justify-between">
           <div>
-            <div className="text-sm font-medium">Start-Erinnerung</div>
-            <div className="text-xs text-slate-400">Bevor eine deiner Gruppen startet</div>
+            <div className="text-sm font-medium">Start-Erinnerung 🔔</div>
+            <div className="text-xs text-slate-400">Push, bevor eine deiner Gruppen startet – auch bei geschlossener App</div>
           </div>
-          <button onClick={toggleReminder} disabled={notifUnsupported}
+          <button onClick={toggleReminder} disabled={busy}
             className={"relative h-7 w-12 rounded-full transition-colors " +
               (startReminderEnabled ? "bg-emerald-600" : "bg-slate-600")}>
             <span className={"absolute top-1 h-5 w-5 rounded-full bg-white transition-all " +
