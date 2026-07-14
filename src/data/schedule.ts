@@ -1,0 +1,27 @@
+import type { ScheduleEvent } from "../types";
+export const SCHEDULE: ScheduleEvent[] = [
+  { id: "d13-arrival", date: "2026-07-13", startTime: "09:00", title: "Arrival & Accreditation", audience: "all", type: "other" },
+  { id: "d13-dinner", date: "2026-07-13", startTime: "18:00", title: "Dinner", audience: "participants", type: "food" },
+  { id: "d13-hod", date: "2026-07-13", startTime: "20:00", title: "Heads of Delegation Meeting", audience: "delegations", type: "meeting" },
+  { id: "d13-rev", date: "2026-07-13", startTime: "21:00", title: "Reviewer's Meeting", audience: "delegations", type: "meeting" },
+  { id: "d14-bf", date: "2026-07-14", startTime: "07:00", title: "Breakfast", audience: "participants", type: "food" },
+  { id: "d14-train", date: "2026-07-14", startTime: "08:30", title: "Training", location: "Tyršův stadion", audience: "participants", type: "training" },
+  { id: "d14-mayor", date: "2026-07-14", startTime: "16:00", title: "Mayor's Reception", audience: "delegations", type: "ceremony" },
+  { id: "d14-parade", date: "2026-07-14", startTime: "17:30", title: "Parade", location: "City Centre", audience: "all", type: "ceremony" },
+  { id: "d14-open", date: "2026-07-14", startTime: "19:00", title: "Opening Ceremony", location: "Tyršův stadion", audience: "all", type: "ceremony" },
+  { id: "d15-train", date: "2026-07-15", startTime: "08:30", title: "Training", location: "Tyršův stadion", audience: "participants", type: "training" },
+  { id: "d15-rev", date: "2026-07-15", startTime: "18:00", title: "Reviewer's Meeting", audience: "delegations", type: "meeting" },
+  { id: "d15-hod", date: "2026-07-15", startTime: "19:00", title: "Heads of Delegation Meeting", audience: "delegations", type: "meeting" },
+  { id: "d16-champ", date: "2026-07-16", startTime: "08:00", title: "World Championship", location: "Tyršův stadion", audience: "all", type: "competition" },
+  { id: "d16-camp", date: "2026-07-16", startTime: "14:00", title: "Camp Olympics", audience: "participants", type: "other" },
+  { id: "d17-exh", date: "2026-07-17", startTime: "09:00", title: "Exhibition of Nations", location: "Central Park / Sady 1. máje", audience: "all", type: "other" },
+  { id: "d17-concert", date: "2026-07-17", startTime: "16:00", title: "Concert", audience: "all", type: "other" },
+  { id: "d17-pres", date: "2026-07-17", startTime: "18:00", title: "Presentation of Nations", location: "Pavlínin dvůr", audience: "all", type: "ceremony" },
+  { id: "d17-abba", date: "2026-07-17", startTime: "21:00", title: "ABBA Revival", audience: "all", type: "other" },
+  { id: "d18-bf", date: "2026-07-18", startTime: "07:00", title: "Breakfast", audience: "participants", type: "food" },
+  { id: "d18-tidy", date: "2026-07-18", startTime: "08:00", title: "Tidying up schools", audience: "participants", type: "other" },
+  { id: "d18-comm", date: "2026-07-18", startTime: "09:00", title: "Commission Meeting", audience: "delegations", type: "meeting" },
+  { id: "d18-lunch", date: "2026-07-18", startTime: "12:00", title: "Lunch", audience: "participants", type: "food" },
+  { id: "d18-close", date: "2026-07-18", startTime: "14:00", title: "Closing Ceremony", location: "Tyršův stadion", audience: "all", type: "ceremony" },
+  { id: "d18-dep", date: "2026-07-18", startTime: "16:00", title: "Departure", audience: "all", type: "transport" }
+];
