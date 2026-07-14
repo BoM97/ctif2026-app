@@ -32,6 +32,8 @@ export interface ResultsPayload {
   warnings: string[];
   rawRowCount: number;
   detectedHeaders: string[];
+  title?: string | null;
+  phase?: "training" | "wettkampf" | null;
 }
 
 export type ChangeType =

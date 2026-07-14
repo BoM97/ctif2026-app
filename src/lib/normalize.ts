@@ -24,6 +24,13 @@ export function matchesFavorite(
 ): boolean {
   const norm = normalizeName(teamName);
   if (!norm) return false;
-  const candidates = [fav.teamName, ...fav.aliases].map(normalizeName).filter(Boolean);
+
+  // Reine Zahlen-Aliases (= Teamnummern) NICHT für Namensabgleich verwenden
+  const nameAliases = fav.aliases.filter((a) => !/^\d+$/.test(a.trim()));
+
+  const candidates = [fav.teamName, ...nameAliases]
+    .map(normalizeName)
+    .filter((c) => c && c.length >= 3); // zu kurze Fragmente ignorieren
+
   return candidates.some((c) => norm === c || norm.includes(c) || c.includes(norm));
 }

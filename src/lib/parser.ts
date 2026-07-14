@@ -2,56 +2,17 @@ import Papa from "papaparse";
 import type { Category, ResultRow, ResultsPayload } from "../types";
 import { parseNum } from "./normalize";
 
-interface ColMap {
-  rank: number; teamName: number; country: number; startNumber: number;
-  obstacleTime: number; obstacleErrors: number;
-  relayTime: number; relayErrors: number;
-  targetTime: number; totalScore: number;
-}
-
-const H = {
-  rank: ["rank", "pořadí", "poradi", "platz", "rang", "místo", "misto", "pos"],
-  team: ["team", "družstvo", "druzstvo", "gruppe", "name", "sbor", "ff", "unit"],
-  country: ["country", "země", "zeme", "land", "nation", "stát", "stat"],
-  startNumber: ["start", "číslo", "cislo", "no.", "nr", "bib", "bewerbsnummer"],
-  obstacleTime: ["obstacle", "překážky", "prekazky", "hindernis", "bahn"],
-  obstacleErr: ["obstacle err", "chyby překážky", "hindernisfehler", "penal"],
-  relayTime: ["relay", "štafeta", "stafeta", "staffel"],
-  relayErr: ["relay err", "chyby štafeta", "staffelfehler"],
-  target: ["target", "vorgabe", "předpoklad", "predpoklad", "handicap", "coeff"],
-  total: ["total", "celkem", "gesamt", "sum", "body", "score", "points", "bodů"]
-};
-
-function findCol(headers: string[], keys: string[]): number {
-  const low = headers.map((h) => (h || "").toLowerCase().trim());
-  for (let i = 0; i < low.length; i++)
-    if (keys.some((k) => low[i].includes(k))) return i;
-  return -1;
-}
-
-function detectHeaderRow(rows: string[][]) {
-  for (let i = 0; i < Math.min(rows.length, 15); i++) {
-    const h = rows[i];
-    const map: ColMap = {
-      rank: findCol(h, H.rank), teamName: findCol(h, H.team),
-      country: findCol(h, H.country), startNumber: findCol(h, H.startNumber),
-      obstacleTime: findCol(h, H.obstacleTime), obstacleErrors: findCol(h, H.obstacleErr),
-      relayTime: findCol(h, H.relayTime), relayErrors: findCol(h, H.relayErr),
-      targetTime: findCol(h, H.target), totalScore: findCol(h, H.total)
-    };
-    const hits = Object.values(map).filter((v) => v >= 0).length;
-    if (map.teamName >= 0 && hits >= 3) return { idx: i, map, headers: h };
-  }
-  return null;
-}
-
-function cell(row: string[], idx: number): string {
-  return idx >= 0 && idx < row.length ? (row[idx] ?? "").trim() : "";
-}
-
+/**
+ * CTIF-Ergebnis-Sheets haben eine feste Spaltenreihenfolge:
+ * [0] Rang [1] Gruppenname [2] Land [3] BewNr
+ * [4] Hindernis-Zeit [5] Hindernis-Fehler
+ * [6] Staffel-Zeit [7] Staffel-Fehler
+ * [8] Vorgabe [9] Gesamt
+ */
 export function parseResultsCsv(csv: string, category: Category): ResultsPayload {
   const warnings: string[] = [];
   const fetchedAt = new Date().toISOString();
+
   let rows: string[][] = [];
   try {
     const res = Papa.parse<string[]>(csv, { skipEmptyLines: "greedy" });
@@ -59,38 +20,87 @@ export function parseResultsCsv(csv: string, category: Category): ResultsPayload
     if (res.errors?.length) warnings.push(res.errors.length + " parse warnings");
   } catch (e) {
     warnings.push("CSV parse failed: " + (e as Error).message);
-    return { category, rows: [], fetchedAt, ok: false, warnings, rawRowCount: 0, detectedHeaders: [] };
+    return {
+      category, rows: [], fetchedAt, ok: false, warnings,
+      rawRowCount: 0, detectedHeaders: [], title: null, phase: null,
+    };
   }
 
-  const header = detectHeaderRow(rows);
-  if (!header) {
-    warnings.push("Keine Header-Zeile erkannt.");
-    return { category, rows: [], fetchedAt, ok: false, warnings, rawRowCount: rows.length, detectedHeaders: [] };
-  }
+  const cell = (r: string[], i: number) => (i < r.length ? (r[i] ?? "").trim() : "");
 
-  const { idx, map, headers } = header;
   const out: ResultRow[] = [];
-  for (let i = idx + 1; i < rows.length; i++) {
-    const r = rows[i];
-    const teamName = cell(r, map.teamName);
-    if (!teamName) continue;
-    if (/^(rank|team|country|celkem|total)/i.test(teamName)) continue;
+  const titleLines: string[] = [];
+  let detectedHeaders: string[] = [];
+
+  for (const r of rows) {
+    const rankRaw = cell(r, 0);
+    const name = cell(r, 1);
+
+    // Kopfzeile merken (für Debug)
+    if (/^(rang|rank|pořadí|platz)/i.test(rankRaw)) {
+      detectedHeaders = r;
+      continue;
+    }
+
+    // Titelzeilen (vor den Daten) sammeln
+    if (
+      out.length === 0 &&
+      rankRaw &&
+      parseNum(rankRaw) == null &&
+      !/^(rang|rank|pořadí|platz|zeit|fehler)/i.test(rankRaw)
+    ) {
+      titleLines.push(rankRaw);
+    }
+
+    // Datenzeile? erste Spalte muss reine Rang-Zahl sein + Name vorhanden
+    const rank = parseNum(rankRaw);
+    if (rank == null) continue;
+    if (!Number.isInteger(rank)) continue;
+    if (!name) continue;
+
     out.push({
-      rank: parseNum(cell(r, map.rank)),
-      teamName,
-      country: cell(r, map.country),
-      startNumber: parseNum(cell(r, map.startNumber)),
-      obstacleTime: parseNum(cell(r, map.obstacleTime)),
-      obstacleErrors: parseNum(cell(r, map.obstacleErrors)),
-      relayTime: parseNum(cell(r, map.relayTime)),
-      relayErrors: parseNum(cell(r, map.relayErrors)),
-      targetTime: parseNum(cell(r, map.targetTime)),
-      totalScore: parseNum(cell(r, map.totalScore)),
+      rank,
+      teamName: name,
+      country: cell(r, 2),
+      startNumber: parseNum(cell(r, 3)),
+      obstacleTime: parseNum(cell(r, 4)),
+      obstacleErrors: parseNum(cell(r, 5)),
+      relayTime: parseNum(cell(r, 6)),
+      relayErrors: parseNum(cell(r, 7)),
+      targetTime: parseNum(cell(r, 8)),
+      totalScore: parseNum(cell(r, 9)),
       category,
-      lastUpdated: fetchedAt
+      lastUpdated: fetchedAt,
     });
   }
-  if (out.length === 0) warnings.push("Keine Datenzeilen.");
-  return { category, rows: out, fetchedAt, ok: out.length > 0, warnings,
-    rawRowCount: rows.length, detectedHeaders: headers };
+
+  if (out.length === 0) warnings.push("Keine Datenzeilen erkannt (Format geändert?).");
+
+  // Phase (Training / Wettkampf) aus den Titelzeilen ableiten
+  const titleText = titleLines.join(" ").toLowerCase();
+  let phase: "training" | "wettkampf" | null = null;
+  if (titleText.includes("training")) phase = "training";
+  else if (
+    titleText.includes("wettkampf") ||
+    titleText.includes("competition") ||
+    titleText.includes("concours") ||
+    titleText.includes("results") ||
+    titleText.includes("ergebnis")
+  ) {
+    phase = "wettkampf";
+  }
+
+  return {
+    category,
+    rows: out,
+    fetchedAt,
+    ok: out.length > 0,
+    warnings,
+    rawRowCount: rows.length,
+    title: titleLines[0] ?? null,
+    phase,
+    detectedHeaders: detectedHeaders.length
+      ? detectedHeaders
+      : ["Rang", "Gruppenname", "Land", "BewNr", "Hind-Zeit", "Hind-Fehler", "Staffel-Zeit", "Staffel-Fehler", "Vorgabe", "Gesamt"],
+  };
 }
